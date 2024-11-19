@@ -8,8 +8,6 @@ from scipy.signal import find_peaks
 import subprocess
 import matplotlib.pyplot as plt
 
-# Keep all imports and initial setup the same...
-
 # Initialize MediaPipe Pose
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
@@ -92,7 +90,33 @@ person_height = st.number_input("Enter your height in inches (default: 68 inches
                               value=68)
 
 if uploaded_file:
-    # ... [Keep file handling code the same]
+    # Save uploaded video to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+        temp_file.write(uploaded_file.read())
+        video_path = temp_file.name
+
+    st.success("Video uploaded successfully!")
+
+    # Load the video
+    cap = cv2.VideoCapture(video_path)
+
+    # Prepare to save frames
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    # Calculate video duration in minutes
+    video_duration_minutes = total_frames / (fps * 60)
+
+    # Debug information
+    st.write("Video properties:")
+    st.write(f"Width: {frame_width}, Height: {frame_height}")
+    st.write(f"FPS: {fps}, Total Frames: {total_frames}")
+    st.write(f"Duration: {video_duration_minutes:.2f} minutes")
+
+    # Temporary directory for frames
+    frames_dir = tempfile.mkdtemp()
 
     # Variables for tracking
     ankle_x_positions = []  # Track x-coordinate instead of y
@@ -130,7 +154,6 @@ if uploaded_file:
         frame_count += 1
 
     cap.release()
-
 # Convert positions to numpy arrays
     ankle_x_positions = np.array(ankle_x_positions)
     hip_x_positions = np.array(hip_x_positions)
@@ -143,13 +166,13 @@ if uploaded_file:
     left_bound_times, left_takeoffs, left_landings = calculate_bound_time(ankle_x_positions, left_peaks, fps)
     
     # Calculate lateral distances
-    right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width  # Convert to pixels
-    left_distances = np.abs(np.diff(ankle_x_positions[left_peaks])) * frame_width    # Convert to pixels
+    right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width if len(right_peaks) > 1 else np.array([])
+    left_distances = np.abs(np.diff(ankle_x_positions[left_peaks])) * frame_width if len(left_peaks) > 1 else np.array([])
     
     # Convert to inches using person's height as reference
     pixels_per_inch = (frame_width * 0.3) / person_height_inches
-    right_distances_inches = right_distances / pixels_per_inch if len(right_distances) > 0 else []
-    left_distances_inches = left_distances / pixels_per_inch if len(left_distances) > 0 else []
+    right_distances_inches = right_distances / pixels_per_inch if len(right_distances) > 0 else np.array([])
+    left_distances_inches = left_distances / pixels_per_inch if len(left_distances) > 0 else np.array([])
     
     # Create and display the analysis graphs
     st.write("### Movement Analysis Graphs")
@@ -160,13 +183,18 @@ if uploaded_file:
     ax1.plot(hip_x_positions, label='Hip Reference', color='green', alpha=0.5)
     
     # Plot bound phases
-    for takeoff, peak, landing in zip(right_takeoffs, right_peaks, right_landings):
-        ax1.axvspan(takeoff, landing, alpha=0.2, color='red', label='Right Bound' if takeoff == right_takeoffs[0] else "")
-    for takeoff, peak, landing in zip(left_takeoffs, left_peaks, left_landings):
-        ax1.axvspan(takeoff, landing, alpha=0.2, color='blue', label='Left Bound' if takeoff == left_takeoffs[0] else "")
+    if len(right_takeoffs) > 0:
+        for takeoff, peak, landing in zip(right_takeoffs, right_peaks, right_landings):
+            ax1.axvspan(takeoff, landing, alpha=0.2, color='red', label='Right Bound' if takeoff == right_takeoffs[0] else "")
+    if len(left_takeoffs) > 0:
+        for takeoff, peak, landing in zip(left_takeoffs, left_peaks, left_landings):
+            ax1.axvspan(takeoff, landing, alpha=0.2, color='blue', label='Left Bound' if takeoff == left_takeoffs[0] else "")
     
-    ax1.plot(right_peaks, ankle_x_positions[right_peaks], "rx", label="Right Peaks")
-    ax1.plot(left_peaks, ankle_x_positions[left_peaks], "bx", label="Left Peaks")
+    if len(right_peaks) > 0:
+        ax1.plot(right_peaks, ankle_x_positions[right_peaks], "rx", label="Right Peaks")
+    if len(left_peaks) > 0:
+        ax1.plot(left_peaks, ankle_x_positions[left_peaks], "bx", label="Left Peaks")
+    
     ax1.set_title('Lateral Movement Tracking\n(Shaded areas show bound phases)')
     ax1.set_ylabel('Position (normalized)')
     ax1.legend()
@@ -215,10 +243,12 @@ if uploaded_file:
         st.write("Bound Metrics:")
         if len(right_bound_times) > 0:
             st.write(f"Right Avg Time: {np.mean(right_bound_times):.3f} seconds")
-            st.write(f"Right Avg Distance: {np.mean(right_distances_inches):.1f} inches")
+            if len(right_distances_inches) > 0:
+                st.write(f"Right Avg Distance: {np.mean(right_distances_inches):.1f} inches")
         if len(left_bound_times) > 0:
             st.write(f"Left Avg Time: {np.mean(left_bound_times):.3f} seconds")
-            st.write(f"Left Avg Distance: {np.mean(left_distances_inches):.1f} inches")
+            if len(left_distances_inches) > 0:
+                st.write(f"Left Avg Distance: {np.mean(left_distances_inches):.1f} inches")
 
     # Create frame-by-frame data
     bounds_by_frame = {frame: {
@@ -322,3 +352,4 @@ if uploaded_file:
 
 else:
     st.warning("Please upload a video.")
+    
