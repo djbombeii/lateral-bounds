@@ -36,36 +36,37 @@ def detect_lateral_bounds(positions, reference_positions, prominence=0.01, dista
     
     return np.array(validated_right), np.array(validated_left)
 
-def calculate_bound_time(positions, peaks, fps):
+def calculate_flight_time(positions, peaks, fps):
     """
-    Calculate time between takeoff and landing for lateral bounds
+    Calculate flight time for lateral bounds by finding takeoff and landing points
     """
-    bound_times = []
+    flight_times = []
     takeoff_indices = []
     landing_indices = []
     
     for peak in peaks:
-        # Look before peak for takeoff
+        # Look before peak for takeoff (when movement starts)
         takeoff_idx = peak
+        baseline = positions[max(peak-20, 0):peak].mean()  # Get baseline position
         for i in range(peak, max(peak-20, 0), -1):
-            if abs(positions[i] - positions[i-1]) > 0.01:  # Threshold for lateral movement
+            if abs(positions[i] - baseline) < 0.01:  # Threshold for takeoff detection
                 takeoff_idx = i
                 break
                 
-        # Look after peak for landing
+        # Look after peak for landing (when movement stabilizes)
         landing_idx = peak
         for i in range(peak, min(peak+20, len(positions)-1)):
-            if abs(positions[i] - positions[i-1]) < 0.005:  # Threshold for stabilization
+            if abs(positions[i] - positions[i-1]) < 0.005:  # Threshold for landing detection
                 landing_idx = i
                 break
         
-        bound_time = (landing_idx - takeoff_idx) / fps
+        flight_time = (landing_idx - takeoff_idx) / fps
         
-        bound_times.append(bound_time)
+        flight_times.append(flight_time)
         takeoff_indices.append(takeoff_idx)
         landing_indices.append(landing_idx)
     
-    return np.array(bound_times), np.array(takeoff_indices), np.array(landing_indices)
+    return np.array(flight_times), np.array(takeoff_indices), np.array(landing_indices)
 
 # App Title
 st.title("Lateral Bounds Analysis")
@@ -73,12 +74,6 @@ st.write("Upload a video to analyze lateral bound jumps.")
 
 # Video Upload Section
 uploaded_file = st.file_uploader("Upload a Video", type=["mp4", "mov"])
-
-# Optional height input for distance calculation
-person_height = st.number_input("Enter your height in inches (default: 68 inches = 5'8\")", 
-                              min_value=48, 
-                              max_value=84, 
-                              value=68)
 
 if uploaded_file:
     # Save uploaded video to a temporary file
@@ -154,40 +149,20 @@ if uploaded_file:
         # Detect bounds in both directions
         right_peaks, left_peaks = detect_lateral_bounds(ankle_x_positions, hip_x_positions, prominence=0.02, distance=15)
 
-        # Initialize empty arrays for times and distances
-        right_bound_times = np.array([])
-        left_bound_times = np.array([])
-        right_distances_inches = np.array([])
-        left_distances_inches = np.array([])
+        # Initialize empty arrays
+        right_flight_times = np.array([])
+        left_flight_times = np.array([])
         right_takeoffs = np.array([])
         right_landings = np.array([])
         left_takeoffs = np.array([])
         left_landings = np.array([])
 
-        # Calculate bound times if peaks exist
+        # Calculate flight times if peaks exist
         if len(right_peaks) > 0:
-            right_bound_times, right_takeoffs, right_landings = calculate_bound_time(ankle_x_positions, right_peaks, fps)
+            right_flight_times, right_takeoffs, right_landings = calculate_flight_time(ankle_x_positions, right_peaks, fps)
         if len(left_peaks) > 0:
-            left_bound_times, left_takeoffs, left_landings = calculate_bound_time(ankle_x_positions, left_peaks, fps)
-        
-        # Calculate distances if we have at least 2 peaks
-        pixels_per_inch = (frame_width * 0.3) / person_height
-        if len(right_peaks) > 1:
-            # Calculate distances between consecutive peaks
-            right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width
-            right_distances_inches = right_distances / pixels_per_inch
-            # Now right_distances_inches will have length len(right_peaks) - 1
-        else:
-            right_distances_inches = np.array([])
-        
-        if len(left_peaks) > 1:
-            # Calculate distances between consecutive peaks
-            left_distances = np.abs(np.diff(ankle_x_positions[left_peaks])) * frame_width
-            left_distances_inches = left_distances / pixels_per_inch
-            # Now left_distances_inches will have length len(left_peaks) - 1
-        else:
-            left_distances_inches = np.array([])
-            
+            left_flight_times, left_takeoffs, left_landings = calculate_flight_time(ankle_x_positions, left_peaks, fps)
+
         # Debug information
         st.write("Detection Results:")
         st.write(f"Right peaks detected: {len(right_peaks)}")
@@ -195,7 +170,7 @@ if uploaded_file:
         
         # Create and display the analysis graphs
         st.write("### Movement Analysis Graphs")
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
         
         # Plot lateral movement
         ax1.plot(ankle_x_positions, label='Lateral Position', color='blue', alpha=0.7)
@@ -219,34 +194,18 @@ if uploaded_file:
         ax1.legend()
         ax1.grid(True, alpha=0.3)
 
-        # Plot bound times
-        ax2.set_title('Bound Times')
-        if len(right_bound_times) > 0:
-            # Only plot if we have peaks and matching times
-            valid_peaks = right_peaks[:len(right_bound_times)]  # Match lengths
-            ax2.plot(valid_peaks, right_bound_times, 'ro-', label='Right Bound Time', alpha=0.7)
-        if len(left_bound_times) > 0:
-            # Only plot if we have peaks and matching times
-            valid_peaks = left_peaks[:len(left_bound_times)]  # Match lengths
-            ax2.plot(valid_peaks, left_bound_times, 'bo-', label='Left Bound Time', alpha=0.7)
-        ax2.set_ylabel('Time (seconds)')
+        # Plot flight times
+        ax2.set_title('Flight Times')
+        if len(right_flight_times) > 0:
+            valid_peaks = right_peaks[:len(right_flight_times)]
+            ax2.plot(valid_peaks, right_flight_times, 'ro-', label='Right Flight Time', alpha=0.7)
+        if len(left_flight_times) > 0:
+            valid_peaks = left_peaks[:len(left_flight_times)]
+            ax2.plot(valid_peaks, left_flight_times, 'bo-', label='Left Flight Time', alpha=0.7)
+        ax2.set_xlabel('Frame Index')
+        ax2.set_ylabel('Flight Time (seconds)')
         ax2.legend()
         ax2.grid(True, alpha=0.3)
-        
-        # Plot bound distances
-        ax3.set_title('Bound Distances')
-        if len(right_distances_inches) > 0:
-            # Only plot if we have peaks and matching distances
-            valid_peaks = right_peaks[:len(right_distances_inches)]  # Match lengths
-            ax3.plot(valid_peaks, right_distances_inches, 'ro-', label='Right Distance', alpha=0.7)
-        if len(left_distances_inches) > 0:
-            # Only plot if we have peaks and matching distances
-            valid_peaks = left_peaks[:len(left_distances_inches)]  # Match lengths
-            ax3.plot(valid_peaks, left_distances_inches, 'bo-', label='Left Distance', alpha=0.7)
-        ax3.set_xlabel('Frame Index')
-        ax3.set_ylabel('Distance (inches)')
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
         
         plt.tight_layout()
         st.pyplot(fig)
@@ -267,61 +226,53 @@ if uploaded_file:
             st.write(f"Bounds per Minute: {bounds_per_minute:.1f}")
         
         with col2:
-            st.write("Bound Metrics:")
-            if len(right_bound_times) > 0:
-                st.write(f"Right Avg Time: {np.mean(right_bound_times):.3f} seconds")
-                if len(right_distances_inches) > 0:
-                    st.write(f"Right Avg Distance: {np.mean(right_distances_inches):.1f} inches")
-            if len(left_bound_times) > 0:
-                st.write(f"Left Avg Time: {np.mean(left_bound_times):.3f} seconds")
-                if len(left_distances_inches) > 0:
-                    st.write(f"Left Avg Distance: {np.mean(left_distances_inches):.1f} inches")
+            st.write("Flight Times:")
+            if len(right_flight_times) > 0:
+                st.write(f"Right Avg Flight Time: {np.mean(right_flight_times):.3f} seconds")
+                st.write(f"Right Max Flight Time: {np.max(right_flight_times):.3f} seconds")
+            if len(left_flight_times) > 0:
+                st.write(f"Left Avg Flight Time: {np.mean(left_flight_times):.3f} seconds")
+                st.write(f"Left Max Flight Time: {np.max(left_flight_times):.3f} seconds")
 
         # Create frame-by-frame data
         bounds_by_frame = {frame: {
             'count': 0, 
-            'current_bound_time': 0,
-            'current_distance': 0,
+            'flight_time': 0,
             'direction': ''
         } for frame in range(frame_count)}
 
         # Update running counters
-        def get_current_metrics(frame_idx, right_p, left_p, right_times, left_times, right_dist, left_dist):
+        def get_current_metrics(frame_idx, right_p, left_p, right_times, left_times):
             right_count = len([p for p in right_p if p <= frame_idx])
             left_count = len([p for p in left_p if p <= frame_idx])
             
             if right_count > 0 and frame_idx >= right_p[0]:
                 time = right_times[min(right_count - 1, len(right_times) - 1)] if len(right_times) > 0 else 0
-                dist = right_dist[min(right_count - 1, len(right_dist) - 1)] if len(right_dist) > 0 else 0
                 direction = 'right'
             elif left_count > 0 and frame_idx >= left_p[0]:
                 time = left_times[min(left_count - 1, len(left_times) - 1)] if len(left_times) > 0 else 0
-                dist = left_dist[min(left_count - 1, len(left_dist) - 1)] if len(left_dist) > 0 else 0
                 direction = 'left'
             else:
                 time = 0
-                dist = 0
                 direction = ''
                 
-            return right_count + left_count, time, dist, direction
+            return right_count + left_count, time, direction
 
         # Update metrics for each frame
         for i in range(frame_count):
-            total_count, bound_time, distance, direction = get_current_metrics(
-                i, right_peaks, left_peaks, right_bound_times, left_bound_times,
-                right_distances_inches, left_distances_inches
+            total_count, flight_time, direction = get_current_metrics(
+                i, right_peaks, left_peaks, right_flight_times, left_flight_times
             )
             
             bounds_by_frame[i] = {
                 'count': total_count,
-                'current_bound_time': bound_time,
-                'current_distance': distance,
+                'flight_time': flight_time,
                 'direction': direction
             }
 
         # Process frames with overlays
         for i in range(frame_count):
-            frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
+            frame_path = os.path.join(frames_dir, f"frame_{frame_count:04d}.png")
             frame = cv2.imread(frame_path)
             
             if frame is not None:
@@ -348,8 +299,7 @@ if uploaded_file:
                 if current_data["direction"]:
                     direction_text = f'{current_data["direction"].title()} Bound'
                     put_text_with_background(frame, direction_text, (50, 150))
-                    put_text_with_background(frame, f'Time: {current_data["current_bound_time"]:.3f}s', (50, 200))
-                    put_text_with_background(frame, f'Distance: {current_data["current_distance"]:.1f}"', (50, 250))
+                    put_text_with_background(frame, f'Flight Time: {current_data["flight_time"]:.3f}s', (50, 200))
 
                 cv2.imwrite(frame_path, frame)
 
@@ -383,4 +333,3 @@ if uploaded_file:
 
 else:
     st.warning("Please upload a video.")
-
