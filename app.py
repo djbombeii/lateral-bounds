@@ -272,7 +272,7 @@ if uploaded_file:
 
         # Process frames with overlays
         for i in range(frame_count):
-            frame_path = os.path.join(frames_dir, f"frame_{frame_count:04d}.png")
+            frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")  # Changed from frame_count:04d to i:04d
             frame = cv2.imread(frame_path)
             
             if frame is not None:
