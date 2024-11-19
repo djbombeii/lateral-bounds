@@ -171,7 +171,7 @@ if uploaded_file:
             left_bound_times, left_takeoffs, left_landings = calculate_bound_time(ankle_x_positions, left_peaks, fps)
         
         # Calculate distances if we have at least 2 peaks
-        pixels_per_inch = (frame_width * 0.3) / person_height_inches
+        pixels_per_inch = (frame_width * 0.3) / person_height  # Changed from person_height_inches to person_height
         if len(right_peaks) > 1:
             right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width
             right_distances_inches = right_distances / pixels_per_inch
