@@ -150,7 +150,7 @@ if uploaded_file:
     ankle_x_positions = np.array(ankle_x_positions)
     hip_x_positions = np.array(hip_x_positions)
 
-try:
+    try:
         # Detect bounds in both directions
         right_peaks, left_peaks = detect_lateral_bounds(ankle_x_positions, hip_x_positions, prominence=0.02, distance=15)
 
