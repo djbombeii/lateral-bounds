@@ -270,9 +270,9 @@ if uploaded_file:
                 'direction': direction
             }
 
-        # Process frames with overlays
+       # Process frames with overlays
         for i in range(frame_count):
-            frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")  # Changed from frame_count:04d to i:04d
+            frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
             frame = cv2.imread(frame_path)
             
             if frame is not None:
@@ -292,14 +292,18 @@ if uploaded_file:
                                 -1)
                     cv2.putText(img, text, position, font, font_scale, color, thickness, cv2.LINE_AA)
 
+                # Calculate current counts for right and left bounds
+                right_count = len([p for p in right_peaks if p <= i])
+                left_count = len([p for p in left_peaks if p <= i])
+                
                 # Add text overlays
                 put_text_with_background(frame, f'Total Bounds: {current_data["count"]}', (50, 50))
                 current_bpm = (current_data["count"] / (i/fps/60)) if i > 0 else 0
                 put_text_with_background(frame, f'Bounds/min: {current_bpm:.1f}', (50, 100))
-                if current_data["direction"]:
-                    direction_text = f'{current_data["direction"].title()} Bound'
-                    put_text_with_background(frame, direction_text, (50, 150))
-                    put_text_with_background(frame, f'Flight Time: {current_data["flight_time"]:.3f}s', (50, 200))
+                put_text_with_background(frame, f'Right Bounds: {right_count}', (50, 150))
+                put_text_with_background(frame, f'Left Bounds: {left_count}', (50, 200))
+                if current_data["flight_time"] > 0:
+                    put_text_with_background(frame, f'Flight Time: {current_data["flight_time"]:.3f}s', (50, 250))
 
                 cv2.imwrite(frame_path, frame)
 
