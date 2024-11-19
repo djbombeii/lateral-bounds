@@ -171,15 +171,23 @@ if uploaded_file:
             left_bound_times, left_takeoffs, left_landings = calculate_bound_time(ankle_x_positions, left_peaks, fps)
         
         # Calculate distances if we have at least 2 peaks
-        pixels_per_inch = (frame_width * 0.3) / person_height  # Changed from person_height_inches to person_height
+        pixels_per_inch = (frame_width * 0.3) / person_height
         if len(right_peaks) > 1:
+            # Calculate distances between consecutive peaks
             right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width
             right_distances_inches = right_distances / pixels_per_inch
+            # Now right_distances_inches will have length len(right_peaks) - 1
+        else:
+            right_distances_inches = np.array([])
         
         if len(left_peaks) > 1:
+            # Calculate distances between consecutive peaks
             left_distances = np.abs(np.diff(ankle_x_positions[left_peaks])) * frame_width
             left_distances_inches = left_distances / pixels_per_inch
-
+            # Now left_distances_inches will have length len(left_peaks) - 1
+        else:
+            left_distances_inches = np.array([])
+            
         # Debug information
         st.write("Detection Results:")
         st.write(f"Right peaks detected: {len(right_peaks)}")
@@ -214,9 +222,13 @@ if uploaded_file:
         # Plot bound times
         ax2.set_title('Bound Times')
         if len(right_bound_times) > 0:
-            ax2.plot(right_peaks[:-1], right_bound_times, 'ro-', label='Right Bound Time', alpha=0.7)
+            # Only plot if we have peaks and matching times
+            valid_peaks = right_peaks[:len(right_bound_times)]  # Match lengths
+            ax2.plot(valid_peaks, right_bound_times, 'ro-', label='Right Bound Time', alpha=0.7)
         if len(left_bound_times) > 0:
-            ax2.plot(left_peaks[:-1], left_bound_times, 'bo-', label='Left Bound Time', alpha=0.7)
+            # Only plot if we have peaks and matching times
+            valid_peaks = left_peaks[:len(left_bound_times)]  # Match lengths
+            ax2.plot(valid_peaks, left_bound_times, 'bo-', label='Left Bound Time', alpha=0.7)
         ax2.set_ylabel('Time (seconds)')
         ax2.legend()
         ax2.grid(True, alpha=0.3)
@@ -224,9 +236,13 @@ if uploaded_file:
         # Plot bound distances
         ax3.set_title('Bound Distances')
         if len(right_distances_inches) > 0:
-            ax3.plot(right_peaks[:-1], right_distances_inches, 'ro-', label='Right Distance', alpha=0.7)
+            # Only plot if we have peaks and matching distances
+            valid_peaks = right_peaks[:len(right_distances_inches)]  # Match lengths
+            ax3.plot(valid_peaks, right_distances_inches, 'ro-', label='Right Distance', alpha=0.7)
         if len(left_distances_inches) > 0:
-            ax3.plot(left_peaks[:-1], left_distances_inches, 'bo-', label='Left Distance', alpha=0.7)
+            # Only plot if we have peaks and matching distances
+            valid_peaks = left_peaks[:len(left_distances_inches)]  # Match lengths
+            ax3.plot(valid_peaks, left_distances_inches, 'bo-', label='Left Distance', alpha=0.7)
         ax3.set_xlabel('Frame Index')
         ax3.set_ylabel('Distance (inches)')
         ax3.legend()
