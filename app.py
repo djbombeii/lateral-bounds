@@ -67,15 +67,6 @@ def calculate_bound_time(positions, peaks, fps):
     
     return np.array(bound_times), np.array(takeoff_indices), np.array(landing_indices)
 
-def calculate_lateral_distance(positions, frame_width, person_height_inches=68):
-    """
-    Calculate lateral distance in inches using person's height as reference
-    """
-    # Convert position differences to actual distances
-    pixels_per_inch = (frame_width * 0.3) / person_height_inches  # Assume person width is ~30% of height
-    distances = np.diff(positions) * frame_width / pixels_per_inch
-    return distances
-
 # App Title
 st.title("Lateral Bounds Analysis")
 st.write("Upload a video to analyze lateral bound jumps.")
@@ -154,202 +145,226 @@ if uploaded_file:
         frame_count += 1
 
     cap.release()
-# Convert positions to numpy arrays
+
+    # Convert positions to numpy arrays
     ankle_x_positions = np.array(ankle_x_positions)
     hip_x_positions = np.array(hip_x_positions)
-    
-    # Detect bounds in both directions
-    right_peaks, left_peaks = detect_lateral_bounds(ankle_x_positions, hip_x_positions, prominence=0.02, distance=15)
 
-    # Calculate bound times and distances
-    right_bound_times, right_takeoffs, right_landings = calculate_bound_time(ankle_x_positions, right_peaks, fps)
-    left_bound_times, left_takeoffs, left_landings = calculate_bound_time(ankle_x_positions, left_peaks, fps)
-    
-    # Calculate lateral distances
-    right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width if len(right_peaks) > 1 else np.array([])
-    left_distances = np.abs(np.diff(ankle_x_positions[left_peaks])) * frame_width if len(left_peaks) > 1 else np.array([])
-    
-    # Convert to inches using person's height as reference
-    pixels_per_inch = (frame_width * 0.3) / person_height_inches
-    right_distances_inches = right_distances / pixels_per_inch if len(right_distances) > 0 else np.array([])
-    left_distances_inches = left_distances / pixels_per_inch if len(left_distances) > 0 else np.array([])
-    
-    # Create and display the analysis graphs
-    st.write("### Movement Analysis Graphs")
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
-    
-    # Plot lateral movement
-    ax1.plot(ankle_x_positions, label='Lateral Position', color='blue', alpha=0.7)
-    ax1.plot(hip_x_positions, label='Hip Reference', color='green', alpha=0.5)
-    
-    # Plot bound phases
-    if len(right_takeoffs) > 0:
-        for takeoff, peak, landing in zip(right_takeoffs, right_peaks, right_landings):
-            ax1.axvspan(takeoff, landing, alpha=0.2, color='red', label='Right Bound' if takeoff == right_takeoffs[0] else "")
-    if len(left_takeoffs) > 0:
-        for takeoff, peak, landing in zip(left_takeoffs, left_peaks, left_landings):
-            ax1.axvspan(takeoff, landing, alpha=0.2, color='blue', label='Left Bound' if takeoff == left_takeoffs[0] else "")
-    
-    if len(right_peaks) > 0:
-        ax1.plot(right_peaks, ankle_x_positions[right_peaks], "rx", label="Right Peaks")
-    if len(left_peaks) > 0:
-        ax1.plot(left_peaks, ankle_x_positions[left_peaks], "bx", label="Left Peaks")
-    
-    ax1.set_title('Lateral Movement Tracking\n(Shaded areas show bound phases)')
-    ax1.set_ylabel('Position (normalized)')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
+try:
+        # Detect bounds in both directions
+        right_peaks, left_peaks = detect_lateral_bounds(ankle_x_positions, hip_x_positions, prominence=0.02, distance=15)
 
-    # Plot bound times
-    ax2.set_title('Bound Times')
-    if len(right_bound_times) > 0:
-        ax2.plot(right_peaks[:-1], right_bound_times, 'ro-', label='Right Bound Time', alpha=0.7)
-    if len(left_bound_times) > 0:
-        ax2.plot(left_peaks[:-1], left_bound_times, 'bo-', label='Left Bound Time', alpha=0.7)
-    ax2.set_ylabel('Time (seconds)')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    # Plot bound distances
-    ax3.set_title('Bound Distances')
-    if len(right_distances_inches) > 0:
-        ax3.plot(right_peaks[:-1], right_distances_inches, 'ro-', label='Right Distance', alpha=0.7)
-    if len(left_distances_inches) > 0:
-        ax3.plot(left_peaks[:-1], left_distances_inches, 'bo-', label='Left Distance', alpha=0.7)
-    ax3.set_xlabel('Frame Index')
-    ax3.set_ylabel('Distance (inches)')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    st.pyplot(fig)
+        # Initialize empty arrays for times and distances
+        right_bound_times = np.array([])
+        left_bound_times = np.array([])
+        right_distances_inches = np.array([])
+        left_distances_inches = np.array([])
+        right_takeoffs = np.array([])
+        right_landings = np.array([])
+        left_takeoffs = np.array([])
+        left_landings = np.array([])
 
-    # Calculate and display statistics
-    total_bounds = len(right_peaks) + len(left_peaks)
-    bounds_per_minute = total_bounds / video_duration_minutes
+        # Calculate bound times if peaks exist
+        if len(right_peaks) > 0:
+            right_bound_times, right_takeoffs, right_landings = calculate_bound_time(ankle_x_positions, right_peaks, fps)
+        if len(left_peaks) > 0:
+            left_bound_times, left_takeoffs, left_landings = calculate_bound_time(ankle_x_positions, left_peaks, fps)
+        
+        # Calculate distances if we have at least 2 peaks
+        pixels_per_inch = (frame_width * 0.3) / person_height_inches
+        if len(right_peaks) > 1:
+            right_distances = np.abs(np.diff(ankle_x_positions[right_peaks])) * frame_width
+            right_distances_inches = right_distances / pixels_per_inch
+        
+        if len(left_peaks) > 1:
+            left_distances = np.abs(np.diff(ankle_x_positions[left_peaks])) * frame_width
+            left_distances_inches = left_distances / pixels_per_inch
 
-    # Display statistics
-    st.write("### Analysis Results")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("Bound Counts:")
-        st.write(f"Total Bounds: {total_bounds}")
-        st.write(f"Right Bounds: {len(right_peaks)}")
-        st.write(f"Left Bounds: {len(left_peaks)}")
-        st.write(f"Bounds per Minute: {bounds_per_minute:.1f}")
-    
-    with col2:
-        st.write("Bound Metrics:")
+        # Debug information
+        st.write("Detection Results:")
+        st.write(f"Right peaks detected: {len(right_peaks)}")
+        st.write(f"Left peaks detected: {len(left_peaks)}")
+        
+        # Create and display the analysis graphs
+        st.write("### Movement Analysis Graphs")
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
+        
+        # Plot lateral movement
+        ax1.plot(ankle_x_positions, label='Lateral Position', color='blue', alpha=0.7)
+        ax1.plot(hip_x_positions, label='Hip Reference', color='green', alpha=0.5)
+        
+        # Plot bound phases
+        if len(right_takeoffs) > 0:
+            for takeoff, peak, landing in zip(right_takeoffs, right_peaks, right_landings):
+                ax1.axvspan(takeoff, landing, alpha=0.2, color='red', label='Right Bound' if takeoff == right_takeoffs[0] else "")
+        if len(left_takeoffs) > 0:
+            for takeoff, peak, landing in zip(left_takeoffs, left_peaks, left_landings):
+                ax1.axvspan(takeoff, landing, alpha=0.2, color='blue', label='Left Bound' if takeoff == left_takeoffs[0] else "")
+        
+        if len(right_peaks) > 0:
+            ax1.plot(right_peaks, ankle_x_positions[right_peaks], "rx", label="Right Peaks")
+        if len(left_peaks) > 0:
+            ax1.plot(left_peaks, ankle_x_positions[left_peaks], "bx", label="Left Peaks")
+        
+        ax1.set_title('Lateral Movement Tracking\n(Shaded areas show bound phases)')
+        ax1.set_ylabel('Position (normalized)')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # Plot bound times
+        ax2.set_title('Bound Times')
         if len(right_bound_times) > 0:
-            st.write(f"Right Avg Time: {np.mean(right_bound_times):.3f} seconds")
-            if len(right_distances_inches) > 0:
-                st.write(f"Right Avg Distance: {np.mean(right_distances_inches):.1f} inches")
+            ax2.plot(right_peaks[:-1], right_bound_times, 'ro-', label='Right Bound Time', alpha=0.7)
         if len(left_bound_times) > 0:
-            st.write(f"Left Avg Time: {np.mean(left_bound_times):.3f} seconds")
-            if len(left_distances_inches) > 0:
-                st.write(f"Left Avg Distance: {np.mean(left_distances_inches):.1f} inches")
-
-    # Create frame-by-frame data
-    bounds_by_frame = {frame: {
-        'count': 0, 
-        'current_bound_time': 0,
-        'current_distance': 0,
-        'direction': ''
-    } for frame in range(frame_count)}
-
-    # Update running counters
-    def get_current_metrics(frame_idx, right_p, left_p, right_times, left_times, right_dist, left_dist):
-        right_count = len([p for p in right_p if p <= frame_idx])
-        left_count = len([p for p in left_p if p <= frame_idx])
+            ax2.plot(left_peaks[:-1], left_bound_times, 'bo-', label='Left Bound Time', alpha=0.7)
+        ax2.set_ylabel('Time (seconds)')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
         
-        if right_count > 0 and frame_idx >= right_p[0]:
-            time = right_times[min(right_count - 1, len(right_times) - 1)]
-            dist = right_dist[min(right_count - 1, len(right_dist) - 1)] if len(right_dist) > 0 else 0
-            direction = 'right'
-        elif left_count > 0 and frame_idx >= left_p[0]:
-            time = left_times[min(left_count - 1, len(left_times) - 1)]
-            dist = left_dist[min(left_count - 1, len(left_dist) - 1)] if len(left_dist) > 0 else 0
-            direction = 'left'
-        else:
-            time = 0
-            dist = 0
-            direction = ''
+        # Plot bound distances
+        ax3.set_title('Bound Distances')
+        if len(right_distances_inches) > 0:
+            ax3.plot(right_peaks[:-1], right_distances_inches, 'ro-', label='Right Distance', alpha=0.7)
+        if len(left_distances_inches) > 0:
+            ax3.plot(left_peaks[:-1], left_distances_inches, 'bo-', label='Left Distance', alpha=0.7)
+        ax3.set_xlabel('Frame Index')
+        ax3.set_ylabel('Distance (inches)')
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+
+        # Calculate and display statistics
+        total_bounds = len(right_peaks) + len(left_peaks)
+        bounds_per_minute = total_bounds / video_duration_minutes
+
+        # Display statistics
+        st.write("### Analysis Results")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("Bound Counts:")
+            st.write(f"Total Bounds: {total_bounds}")
+            st.write(f"Right Bounds: {len(right_peaks)}")
+            st.write(f"Left Bounds: {len(left_peaks)}")
+            st.write(f"Bounds per Minute: {bounds_per_minute:.1f}")
+        
+        with col2:
+            st.write("Bound Metrics:")
+            if len(right_bound_times) > 0:
+                st.write(f"Right Avg Time: {np.mean(right_bound_times):.3f} seconds")
+                if len(right_distances_inches) > 0:
+                    st.write(f"Right Avg Distance: {np.mean(right_distances_inches):.1f} inches")
+            if len(left_bound_times) > 0:
+                st.write(f"Left Avg Time: {np.mean(left_bound_times):.3f} seconds")
+                if len(left_distances_inches) > 0:
+                    st.write(f"Left Avg Distance: {np.mean(left_distances_inches):.1f} inches")
+
+        # Create frame-by-frame data
+        bounds_by_frame = {frame: {
+            'count': 0, 
+            'current_bound_time': 0,
+            'current_distance': 0,
+            'direction': ''
+        } for frame in range(frame_count)}
+
+        # Update running counters
+        def get_current_metrics(frame_idx, right_p, left_p, right_times, left_times, right_dist, left_dist):
+            right_count = len([p for p in right_p if p <= frame_idx])
+            left_count = len([p for p in left_p if p <= frame_idx])
             
-        return right_count + left_count, time, dist, direction
-
-    # Update metrics for each frame
-    for i in range(frame_count):
-        total_count, bound_time, distance, direction = get_current_metrics(
-            i, right_peaks, left_peaks, right_bound_times, left_bound_times,
-            right_distances_inches, left_distances_inches
-        )
-        
-        bounds_by_frame[i] = {
-            'count': total_count,
-            'current_bound_time': bound_time,
-            'current_distance': distance,
-            'direction': direction
-        }
-
-    # Process frames with overlays
-    for i in range(frame_count):
-        frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
-        frame = cv2.imread(frame_path)
-        
-        if frame is not None:
-            current_data = bounds_by_frame[i]
-            
-            def put_text_with_background(img, text, position):
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 1.5
-                thickness = 3
-                color = (0, 255, 0)
+            if right_count > 0 and frame_idx >= right_p[0]:
+                time = right_times[min(right_count - 1, len(right_times) - 1)] if len(right_times) > 0 else 0
+                dist = right_dist[min(right_count - 1, len(right_dist) - 1)] if len(right_dist) > 0 else 0
+                direction = 'right'
+            elif left_count > 0 and frame_idx >= left_p[0]:
+                time = left_times[min(left_count - 1, len(left_times) - 1)] if len(left_times) > 0 else 0
+                dist = left_dist[min(left_count - 1, len(left_dist) - 1)] if len(left_dist) > 0 else 0
+                direction = 'left'
+            else:
+                time = 0
+                dist = 0
+                direction = ''
                 
-                (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
-                cv2.rectangle(img, 
-                            (position[0] - 10, position[1] - text_height - 10),
-                            (position[0] + text_width + 10, position[1] + 10),
-                            (0, 0, 0),
-                            -1)
-                cv2.putText(img, text, position, font, font_scale, color, thickness, cv2.LINE_AA)
+            return right_count + left_count, time, dist, direction
 
-            # Add text overlays
-            put_text_with_background(frame, f'Total Bounds: {current_data["count"]}', (50, 50))
-            current_bpm = (current_data["count"] / (i/fps/60)) if i > 0 else 0
-            put_text_with_background(frame, f'Bounds/min: {current_bpm:.1f}', (50, 100))
-            if current_data["direction"]:
-                direction_text = f'{current_data["direction"].title()} Bound'
-                put_text_with_background(frame, direction_text, (50, 150))
-                put_text_with_background(frame, f'Time: {current_data["current_bound_time"]:.3f}s', (50, 200))
-                put_text_with_background(frame, f'Distance: {current_data["current_distance"]:.1f}"', (50, 250))
+        # Update metrics for each frame
+        for i in range(frame_count):
+            total_count, bound_time, distance, direction = get_current_metrics(
+                i, right_peaks, left_peaks, right_bound_times, left_bound_times,
+                right_distances_inches, left_distances_inches
+            )
+            
+            bounds_by_frame[i] = {
+                'count': total_count,
+                'current_bound_time': bound_time,
+                'current_distance': distance,
+                'direction': direction
+            }
 
-            cv2.imwrite(frame_path, frame)
+        # Process frames with overlays
+        for i in range(frame_count):
+            frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
+            frame = cv2.imread(frame_path)
+            
+            if frame is not None:
+                current_data = bounds_by_frame[i]
+                
+                def put_text_with_background(img, text, position):
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 1.5
+                    thickness = 3
+                    color = (0, 255, 0)
+                    
+                    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+                    cv2.rectangle(img, 
+                                (position[0] - 10, position[1] - text_height - 10),
+                                (position[0] + text_width + 10, position[1] + 10),
+                                (0, 0, 0),
+                                -1)
+                    cv2.putText(img, text, position, font, font_scale, color, thickness, cv2.LINE_AA)
 
-    # Use FFmpeg to compile video
-    output_video_path = "output_with_overlays.mp4"
-    ffmpeg_command = [
-        "ffmpeg",
-        "-y",
-        "-framerate", str(fps),
-        "-i", os.path.join(frames_dir, "frame_%04d.png"),
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-preset", "fast",
-        output_video_path
-    ]
-    subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # Add text overlays
+                put_text_with_background(frame, f'Total Bounds: {current_data["count"]}', (50, 50))
+                current_bpm = (current_data["count"] / (i/fps/60)) if i > 0 else 0
+                put_text_with_background(frame, f'Bounds/min: {current_bpm:.1f}', (50, 100))
+                if current_data["direction"]:
+                    direction_text = f'{current_data["direction"].title()} Bound'
+                    put_text_with_background(frame, direction_text, (50, 150))
+                    put_text_with_background(frame, f'Time: {current_data["current_bound_time"]:.3f}s', (50, 200))
+                    put_text_with_background(frame, f'Distance: {current_data["current_distance"]:.1f}"', (50, 250))
 
-    # Display the processed video
-    st.write("### Processed Video with Visual Overlays")
-    st.video(output_video_path)
+                cv2.imwrite(frame_path, frame)
 
-    # Cleanup
-    os.remove(video_path)
-    for frame_file in os.listdir(frames_dir):
-        os.remove(os.path.join(frames_dir, frame_file))
-    os.rmdir(frames_dir)
+        # Use FFmpeg to compile video
+        output_video_path = "output_with_overlays.mp4"
+        ffmpeg_command = [
+            "ffmpeg",
+            "-y",
+            "-framerate", str(fps),
+            "-i", os.path.join(frames_dir, "frame_%04d.png"),
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "fast",
+            output_video_path
+        ]
+        subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Display the processed video
+        st.write("### Processed Video with Visual Overlays")
+        st.video(output_video_path)
+
+    except Exception as e:
+        st.error(f"An error occurred during analysis: {str(e)}")
+
+    finally:
+        # Cleanup
+        os.remove(video_path)
+        for frame_file in os.listdir(frames_dir):
+            os.remove(os.path.join(frames_dir, frame_file))
+        os.rmdir(frames_dir)
 
 else:
     st.warning("Please upload a video.")
-    
+
